@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArduIA, constructor de prompts para Arduino</title>
+<meta name="description" content="Asistente por botones que arma prompts claros para pedirle a una IA el código y las conexiones de un proyecto con Arduino. Grupo N.º 11, UTN, Licenciatura en Tecnología Educativa.">
+<style>
+:root{
+  --bg:#e9edf2; --card:#ffffff; --ink:#1b2430; --muted:#566274;
+  --brand:#12355b; --brand-ink:#ffffff; --accent:#0a8a8f; --link:#0b6e72;
+  --user:#12355b; --user-ink:#ffffff; --bot:#eff3f8; --line:#d5dce6;
+  --chip-bg:#ffffff; --chip-ink:#12355b; --chip-line:#9fb3cc; --chip-hover:#e6eef8;
+  --code-bg:#0f1b2a; --code-ink:#e3edf7; --focus:#0a8a8f;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1016; --card:#141b24; --ink:#e6ebf2; --muted:#9aa7b8;
+    --brand:#17406d; --brand-ink:#ffffff; --accent:#3cc0c5; --link:#6fd6da;
+    --user:#2a5b94; --user-ink:#ffffff; --bot:#1c2530; --line:#2a3544;
+    --chip-bg:#141b24; --chip-ink:#cfe0f5; --chip-line:#3b5473; --chip-hover:#1d2b3b;
+    --code-bg:#0a121b; --code-ink:#dbe8f5; --focus:#3cc0c5;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:16px/1.55 "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+.app{
+  display:flex; flex-direction:column; height:100dvh; max-width:860px; margin:0 auto;
+  background:var(--card); overflow:hidden;
+}
+@media (min-width:900px){
+  .app{height:calc(100dvh - 32px); margin:16px auto; border-radius:14px; border:1px solid var(--line); box-shadow:0 8px 30px rgba(10,25,45,.12)}
+}
+header.top{
+  display:flex; align-items:center; gap:12px; padding:12px 16px;
+  background:var(--brand); color:var(--brand-ink);
+}
+.avatar{flex:none; width:42px; height:42px; border-radius:10px; background:rgba(255,255,255,.14); display:grid; place-items:center}
+.avatar svg{width:28px;height:28px}
+.titles{min-width:0;flex:1}
+.titles h1{margin:0; font:600 1.15rem/1.2 Georgia,"Times New Roman",serif; letter-spacing:.2px}
+.titles p{margin:2px 0 0; font-size:.78rem; opacity:.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tools{display:flex; gap:6px; flex:none}
+.tbtn{
+  appearance:none; border:1px solid rgba(255,255,255,.35); background:transparent; color:inherit;
+  font:inherit; font-size:.82rem; padding:6px 10px; border-radius:8px; cursor:pointer; min-height:34px;
+}
+.tbtn:hover{background:rgba(255,255,255,.14)}
+#log{
+  flex:1; overflow-y:auto; padding:18px 16px 12px; scroll-behavior:smooth; position:relative;
+  display:flex; flex-direction:column; gap:14px;
+}
+@media (prefers-reduced-motion:reduce){ #log{scroll-behavior:auto} }
+.row{display:flex; gap:10px; max-width:100%}
+.row.user{justify-content:flex-end}
+.mini{flex:none; width:30px; height:30px; border-radius:8px; background:var(--brand); color:#fff; display:grid; place-items:center; margin-top:2px}
+.mini svg{width:19px;height:19px}
+.bubble{max-width:min(660px,calc(100% - 44px)); padding:11px 14px; border-radius:14px; overflow-wrap:anywhere}
+.bot .bubble{background:var(--bot); border-top-left-radius:4px}
+.user .bubble{background:var(--user); color:var(--user-ink); border-top-right-radius:4px; max-width:min(520px,90%)}
+.bubble p{margin:0 0 .6em}
+.bubble p:last-child,.bubble ul:last-child,.bubble ol:last-child{margin-bottom:0}
+.bubble ul,.bubble ol{margin:.2em 0 .7em; padding-left:1.25em}
+.bubble li{margin:.18em 0}
+.bubble a{color:var(--link); text-underline-offset:2px}
+.bubble h2{margin:0 0 .4em; font:600 1rem/1.3 Georgia,serif}
+.note{font-size:.84rem; color:var(--muted)}
+.codewrap{position:relative; margin:.4em 0 .7em}
+.codewrap pre{
+  margin:0; padding:36px 14px 14px; background:var(--code-bg); color:var(--code-ink);
+  border-radius:10px; overflow-x:auto; font:.86rem/1.65 ui-monospace,SFMono-Regular,Consolas,Menlo,monospace;
+  white-space:pre-wrap; word-break:break-word;
+}
+.copy{
+  position:absolute; top:6px; right:6px; font:inherit; font-size:.78rem; padding:4px 10px; border-radius:6px;
+  border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.12); color:#e3edf7; cursor:pointer;
+}
+.copy:hover{background:rgba(255,255,255,.24)}
+/* partes del prompt */
+.p{--c:#7fd1ff; border-bottom:2px solid var(--c); padding-bottom:1px}
+.p::before{
+  content:attr(data-n); font:700 .64rem/1 "Segoe UI",system-ui,sans-serif; color:#0f1b2a; background:var(--c);
+  padding:2px 5px; border-radius:4px; margin-right:5px; vertical-align:2px;
+}
+.p2{--c:#ffd479}.p3{--c:#9be59b}.p4{--c:#ff9fb2}
+.legend{list-style:none; padding:0; margin:.3em 0 .7em}
+.legend li{display:flex; gap:8px; align-items:baseline; margin:.25em 0; font-size:.9rem}
+.sw{flex:none; width:.95em; height:.95em; border-radius:3px; background:var(--c); transform:translateY(2px)}
+.actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px}
+.abtn{display:inline-block; font:inherit; font-size:.86rem; padding:6px 12px; border-radius:8px; border:1px solid var(--accent); color:var(--link); background:transparent; text-decoration:none; cursor:pointer}
+.abtn:hover{background:var(--chip-hover)}
+.warn{border-left:4px solid #d9a21b; padding:6px 10px; background:rgba(217,162,27,.12); border-radius:0 8px 8px 0; margin:.4em 0 .6em}
+.typing{display:inline-flex; gap:4px; padding:4px 2px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:b 1s infinite ease-in-out}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.typing i{animation:none;opacity:.6}}
+/* botones de respuesta */
+.chips{display:flex; flex-wrap:wrap; gap:8px; padding-left:40px}
+.chip{
+  font:inherit; font-size:.92rem; padding:9px 14px; border-radius:12px; cursor:pointer; min-height:42px;
+  background:var(--chip-bg); color:var(--chip-ink); border:1px solid var(--chip-line); text-align:left;
+}
+.chip:hover{background:var(--chip-hover)}
+.chip.main{background:var(--brand); color:var(--brand-ink); border-color:var(--brand); font-weight:600}
+.chip.main:hover{filter:brightness(1.18)}
+.chip.ghost{border-style:dashed; color:var(--muted)}
+.foot{padding:8px 16px 10px; font-size:.72rem; color:var(--muted); text-align:center; border-top:1px solid var(--line)}
+:focus-visible{outline:3px solid var(--focus); outline-offset:2px}
+dialog{width:min(680px,calc(100% - 24px)); max-height:calc(100dvh - 32px); padding:0; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink)}
+dialog::backdrop{background:rgba(8,16,28,.55)}
+.dhead{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:14px 18px; background:var(--brand); color:var(--brand-ink); position:sticky; top:0}
+.dhead h2{margin:0; font:600 1.1rem Georgia,serif}
+.dbody{padding:14px 20px 20px; overflow-y:auto; max-height:calc(100dvh - 120px); font-size:.93rem}
+.dbody h3{margin:1.1em 0 .35em; font:600 .8rem/1.2 "Segoe UI",system-ui,sans-serif; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.dbody p,.dbody ul{margin:.3em 0}
+.dbody ul{padding-left:1.2em}
+.dbody .apa{padding-left:2em; text-indent:-2em; margin:.45em 0}
+.dbody details{margin:.4em 0; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:var(--bot)}
+.dbody summary{cursor:pointer; font-weight:600}
+.dbody a{color:var(--link)}
+@media (max-width:520px){ .titles p{display:none} .chips{padding-left:0} }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="chip" viewBox="0 0 32 32">
+    <rect x="8" y="8" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+    <circle cx="14" cy="16" r="1.7" fill="currentColor"/><circle cx="18" cy="16" r="1.7" fill="currentColor"/>
+    <path d="M12 5v3M16 5v3M20 5v3M12 24v3M16 24v3M20 24v3M5 12h3M5 16h3M5 20h3M24 12h3M24 16h3M24 20h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div class="app">
+  <header class="top">
+    <div class="avatar"><svg aria-hidden="true"><use href="#chip"/></svg></div>
+    <div class="titles">
+      <h1>ArduIA</h1>
+      <p>Constructor de prompts para Arduino</p>
+    </div>
+    <div class="tools">
+      <button class="tbtn" type="button" id="btnHome">Inicio</button>
+      <button class="tbtn" type="button" id="btnCred">Créditos</button>
+    </div>
+  </header>
+
+  <main id="log" role="log" aria-live="polite" aria-label="Conversación con ArduIA"></main>
+
+  <div class="foot">Asistente por botones. No guarda tus datos. Los prompts se arman con plantillas, no con IA en vivo.</div>
+</div>
+
+<dialog id="creditos" aria-labelledby="credTitulo">
+  <div class="dhead">
+    <h2 id="credTitulo">Créditos y autoría</h2>
+    <button class="tbtn" type="button" id="credCerrar">Cerrar</button>
+  </div>
+  <div class="dbody">
+    <h3>Institución</h3>
+    <p><strong>Universidad Tecnológica Nacional (UTN)</strong>, Facultad Regional Buenos Aires<br>
+    Licenciatura en Tecnología Educativa</p>
+
+    <h3>Materia y recurso</h3>
+    <p>Electiva: <em>Gestión de recursos digitales con IA generativa</em><br>
+    Unidad 6: Espacios digitales enriquecidos con IA generativa (chatbot)</p>
+    <p><strong>Equipo N.º 11</strong> · Segundo cuatrimestre de 2026</p>
+
+    <h3>Integrantes del grupo</h3>
+    <ul>
+      <li>Brandán Pretzel, Ignacio</li>
+      <li>Leal, Juan Pablo</li>
+      <li>Martín Díaz, Ester</li>
+      <li>Pastor, Sofía del Carmen</li>
+      <li>Sandoval, Rodolfo Oscar</li>
+    </ul>
+
+    <h3>Herramienta de IA utilizada en este recurso</h3>
+    <p>Claude (Anthropic), para el diseño del flujo conversacional, las plantillas de prompts y la programación del asistente.</p>
+
+    <h3>Prompts utilizados</h3>
+    <details>
+      <summary>Ver prompts (síntesis)</summary>
+      <p id="credPrompt1"><strong>Prompt 1.</strong> Diseñá un chatbot en un único archivo HTML, sin servidor ni API, para el espacio digital del Grupo N.º 11 sobre «Prompt Engineering y Arduino como mediadores tecnopedagógicos». Debe estar dirigido al público general, con un tono acorde a un trabajo universitario, y mencionar los créditos de autoría con las herramientas de IA utilizadas. Tomá como base los trabajos prácticos del grupo, la consigna del Trabajo Integrador Final y el material obligatorio de la Unidad 6.</p>
+      <p id="credPrompt2"><strong>Prompt 2 (ajuste).</strong> El chatbot repite lo que va a mostrar la página y no tiene una utilidad real. Quitá el chat de texto libre y hacelo por botones. Que cada recorrido termine en algo útil: un constructor de prompts para Arduino (objetivo, entorno, nivel y formato de salida) y un menú breve de dudas rápidas.</p>
+    </details>
+
+    <h3>Declaración de uso de IA</h3>
+    <p>El diseño y la programación de este asistente se realizaron con asistencia de IA generativa. Las plantillas y los contenidos se basan en los trabajos prácticos del Grupo N.º 11 (Unidades 2 a 5) y en el material obligatorio de la Unidad 6, y fueron revisados por los integrantes del grupo. El asistente no es un modelo de lenguaje en tiempo real: arma los prompts con plantillas prediseñadas, no consulta internet y no almacena datos de las personas que lo usan.</p>
+
+    <h3>Referencias (APA)</h3>
+    <p class="apa">Anthropic. (2026). <em>Claude</em> (versión de noviembre de 2026) [Modelo de lenguaje de gran escala]. https://claude.ai</p>
+    <p class="apa">Autodesk. (2026). <em>Tinkercad Circuits</em> [Software de simulación de circuitos]. https://www.tinkercad.com</p>
+    <p class="apa">Cortés, F. (2023, 22 de septiembre). <em>La estructura de un prompt: cómo obtener respuestas precisas</em>. https://es.scribd.com/document/928306921/Estructura-de-Un-PROMPT</p>
+    <p class="apa">Universidad Tecnológica Nacional. (2026). <em>Material obligatorio Unidad 2: Creación de texto con IAG</em> [Material de cátedra, estructura de prompt según Cruzado, 2024]. Licenciatura en Tecnología Educativa, Electiva: Gestión de recursos digitales con IA generativa, Facultad Regional Buenos Aires.</p>
+    <p class="apa">Universidad Tecnológica Nacional. (2026). <em>Material obligatorio Unidad 6: Espacios digitales enriquecidos con IAG</em> [Material de cátedra]. Licenciatura en Tecnología Educativa, Electiva: Gestión de recursos digitales con IA generativa, Facultad Regional Buenos Aires.</p>
+  </div>
+</dialog>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- datos del constructor ---------- */
+var TINKERCAD_URL = "https://www.tinkercad.com/circuits";
+
+/* comp / conex: texto único o {sim, fis}. noSim: el simulador no incluye el componente. */
+var PRESETS = [
+ {id:"led", label:"Hacer parpadear un LED",
+  goal:"hacer parpadear un LED cada un segundo",
+  comp:"1 placa Arduino Uno R3, 1 LED y 1 resistencia de 220 Ω",
+  conex:"El LED va en el pin digital 13, con la resistencia en serie."},
+ {id:"temp", label:"Leer temperatura y encender una alarma",
+  goal:"encender un LED cuando la temperatura supere los 30 °C",
+  comp:{sim:"1 placa Arduino Uno R3, 1 sensor de temperatura analógico (TMP36), 1 LED y 1 resistencia de 220 Ω",
+        fis:"1 placa Arduino Uno R3, 1 sensor de temperatura analógico (por ejemplo LM35), 1 LED y 1 resistencia de 220 Ω"},
+  conex:"El sensor va en el pin analógico A0 y el LED en el pin digital 13."},
+ {id:"pulsador", label:"Encender algo con un pulsador",
+  goal:"encender un LED mientras se mantiene presionado un pulsador",
+  comp:"1 placa Arduino Uno R3, 1 pulsador, 1 LED y 1 resistencia de 220 Ω",
+  conex:"El pulsador va en el pin digital 2 (usando INPUT_PULLUP) y el LED en el pin digital 13."},
+ {id:"obstaculos", label:"Detectar obstáculos (lentes para no videntes)",
+  goal:"emitir un pitido con un buzzer cuando haya un obstáculo a menos de 50 cm, como base de unos lentes detectores de obstáculos para personas no videntes",
+  comp:{sim:"1 placa Arduino Uno R3, 1 sensor ultrasónico de distancia (el de la biblioteca de Tinkercad) y 1 buzzer piezoeléctrico",
+        fis:"1 placa Arduino Uno R3, 1 sensor ultrasónico HC-SR04 y 1 buzzer"},
+  conex:{sim:"El buzzer va en el pin digital 8. Indicá vos los pines del sensor según su modelo y explicá las conexiones.",
+         fis:"TRIG en el pin 9, ECHO en el pin 10 y el buzzer en el pin 8."}},
+ {id:"huerta", label:"Regar una huerta según la humedad",
+  goal:"activar el riego cuando la humedad del suelo esté por debajo de un valor límite, como base de la automatización de una huerta",
+  comp:{sim:"1 placa Arduino Uno R3, 1 sensor de humedad de suelo y 1 LED con resistencia de 220 Ω que simula la bomba",
+        fis:"1 placa Arduino Uno R3, 1 sensor de humedad de suelo, 1 módulo relé y 1 bomba de agua de bajo voltaje"},
+  conex:{sim:"El sensor va en el pin analógico A0 y el LED en el pin digital 13.",
+         fis:"El sensor va en el pin analógico A0 y el relé en el pin digital 7. Incluí las precauciones de alimentación de la bomba."}},
+ {id:"servo", label:"Dispensar comida con un servomotor",
+  goal:"mover un servomotor para dispensar una porción de alimento cuando se presiona un pulsador, como base de un expendedor de comida para mascotas",
+  comp:"1 placa Arduino Uno R3, 1 servomotor y 1 pulsador",
+  conex:"El servo va en el pin digital 9 y el pulsador en el pin digital 2."},
+ {id:"color", label:"Detectar colores (sensor TCS3200)", noSim:true,
+  goal:"detectar si un objeto es rojo, verde o azul usando el sensor de color TCS3200",
+  comp:"1 placa Arduino Uno R3 y 1 sensor de color TCS3200",
+  conex:"Proponé vos los pines para S0, S1, S2, S3 y OUT, y explicá las conexiones."}
+];
+var P = {}; PRESETS.forEach(function(p){P[p.id]=p;});
+
+var NIVEL = {
+  pr:{label:"Principiante, sin experiencia", txt:"Soy principiante y no tengo experiencia previa en programación."},
+  in:{label:"Ya hice sketches simples", txt:"Ya hice sketches simples con Arduino, pero todavía me cuesta pasar de una idea a un programa completo."}
+};
+var FMT = {
+  codigo:{label:"Conexiones y código comentado", txt:"Formato de salida: primero una lista numerada con las conexiones y después el código completo, comentado en español."},
+  aprender:{label:"Explicado paso a paso", txt:"Formato de salida: explicá paso a paso, con lenguaje simple, qué hace cada parte (conexiones, setup y loop) y después mostrá el código completo comentado en español."},
+  verificar:{label:"Con preguntas para verificar que entendí", txt:"Formato de salida: lista numerada de conexiones, código completo comentado en español y, al final, tres preguntas para que yo compruebe que entendí cómo funciona."}
+};
+var ENV = {
+  sim:{label:"Simulador (Tinkercad)", txt:"en el simulador Tinkercad Circuits, sin materiales físicos"},
+  fis:{label:"Placa física en el taller", txt:"con una placa Arduino Uno física, en el taller de mi escuela técnica"}
+};
+
+/* ---------- utilidades ---------- */
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function ul(a){return "<ul>"+a.map(function(x){return "<li>"+x+"</li>";}).join("")+"</ul>";}
+function ol(a){return "<ol>"+a.map(function(x){return "<li>"+x+"</li>";}).join("")+"</ol>";}
+function pick(v,env){return typeof v==="string"?v:v[env];}
+
+/* ---------- dudas rápidas ---------- */
+var DUDAS = [
+ {id:"pines", label:"Guía rápida de pines", a:'<p><strong>Arduino Uno, lo básico:</strong></p>'+ul([
+   "<strong>Digitales 0 al 13:</strong> para actuadores y entradas simples (pulsadores). Conviene evitar el 0 y el 1, que se usan en la comunicación USB.",
+   "<strong>Con ~ (3, 5, 6, 9, 10 y 11):</strong> admiten PWM, útil para controlar brillo o servos.",
+   "<strong>Analógicos A0 a A5:</strong> para leer sensores que entregan valores variables.",
+   "<strong>5V, 3.3V y GND:</strong> alimentación de los componentes.",
+   "<strong>USB y jack DC:</strong> programar la placa y alimentarla desde afuera. El botón <em>reset</em> reinicia el programa."])},
+ {id:"simfis", label:"¿Tinkercad o placa física?", a:'<ul><li><strong>Tinkercad:</strong> gratis, sin riesgo de dañar componentes y desde cualquier navegador. Ideal para empezar y practicar la lógica.</li><li><strong>Placa física:</strong> necesaria cuando el simulador no tiene el componente (por ejemplo el sensor de color TCS3200 o un lector de huella) y para probar en condiciones reales.</li></ul><p>Una buena secuencia: simular primero siempre que se pueda y pasar al hardware después.</p>'},
+ {id:"prompt", label:"¿Qué lleva un buen prompt?", a:'<p>Según la estructura trabajada en la materia (Cruzado, 2024), cuatro elementos:</p>'+ol(["<strong>Instrucción</strong>: la tarea concreta.","<strong>Contexto</strong>: entorno, nivel y situación.","<strong>Datos de entrada</strong>: componentes y conexiones.","<strong>Indicador de salida</strong>: el formato en que querés la respuesta."])+'<p>Cuanto más específico es el prompt, más útil es la respuesta.</p>'},
+ {id:"validar", label:"¿Qué reviso antes de confiar en el código?", a:'<p>La IA puede equivocarse o inventar cosas. Antes de usar lo que te devuelve:</p>'+ul(["Los <strong>pines del código</strong> coinciden con tu montaje.","Usa solo <strong>bibliotecas</strong> que existen y tenés disponibles.","Los <strong>valores</strong> (resistencia, voltaje, umbrales) son razonables para tus componentes.","Lo <strong>probaste en el simulador</strong> o con poco riesgo antes de conectar algo más.","Podés <strong>explicar con tus palabras</strong> qué hace cada parte (<code>setup</code> y <code>loop</code>)."])},
+ {id:"como", label:"¿Cómo funciona este asistente?", a:'<p>ArduIA es un chatbot <strong>por botones y basado en reglas</strong>. Cada opción que elegís completa una plantilla con la estructura de prompt de la materia y arma el texto final.</p><p>No usa IA en vivo, no consulta internet y no guarda tus elecciones. Su objetivo es ayudarte a pedirle bien las cosas a una IA, no reemplazarla ni reemplazar tu criterio.</p>'}
+];
+var D = {}; DUDAS.forEach(function(d){D[d.id]=d;});
+
+/* ---------- estado ---------- */
+var S = {}, STEPS=["goal","env","nivel","fmt"];
+var log=document.getElementById("log");
+var busy=false, chipsEl=null;
+var reduce=window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var coarse=window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+
+/* ---------- interfaz ---------- */
+function scrollToMsg(el){
+  var tall = el.offsetHeight > log.clientHeight*0.75;
+  log.scrollTo({top: tall ? el.offsetTop-8 : log.scrollHeight, behavior: reduce?"auto":"smooth"});
+}
+function clearChips(){ if(chipsEl){chipsEl.remove(); chipsEl=null;} }
+function addUser(text){
+  clearChips();
+  var r=document.createElement("div"); r.className="row user";
+  var b=document.createElement("div"); b.className="bubble"; b.textContent=text;
+  r.appendChild(b); log.appendChild(r); scrollToMsg(r);
+}
+function botRow(html){
+  var r=document.createElement("div"); r.className="row bot";
+  r.innerHTML='<div class="mini"><svg aria-hidden="true"><use href="#chip"/></svg></div><div class="bubble"></div>';
+  r.lastChild.innerHTML=html; return r;
+}
+function showChips(list){
+  clearChips(); if(!list||!list.length) return;
+  chipsEl=document.createElement("div"); chipsEl.className="chips";
+  list.forEach(function(c){
+    var b=document.createElement("button"); b.type="button";
+    b.className="chip"+(c.cls?" "+c.cls:""); b.textContent=c.label; b.dataset.act=c.act;
+    chipsEl.appendChild(b);
+  });
+  log.appendChild(chipsEl);
+}
+function say(html, chips){
+  busy=true;
+  var typing=botRow('<span class="typing" aria-label="ArduIA está escribiendo"><i></i><i></i><i></i></span>');
+  log.appendChild(typing); log.scrollTo({top:log.scrollHeight, behavior:"auto"});
+  var delay = reduce ? 0 : Math.min(550, 220 + html.length*0.08);
+  setTimeout(function(){
+    var row=botRow(html); typing.replaceWith(row);
+    showChips(chips); scrollToMsg(row); busy=false;
+    if(!coarse && chipsEl && chipsEl.firstChild){ chipsEl.firstChild.focus({preventScroll:true}); }
+  }, delay);
+}
+
+/* ---------- pantallas ---------- */
+var HOME_CHIPS=[
+  {label:"Armar un prompt para Arduino", act:"builder", cls:"main"},
+  {label:"Dudas rápidas", act:"dudas"},
+  {label:"Créditos", act:"cred"}
+];
+function home(first){
+  S={};
+  say('<p>'+(first?'¡Hola! Soy <strong>ArduIA</strong>. ':'')+'Te ayudo a convertir una idea de proyecto en un <strong>prompt claro</strong> para pedirle a una IA el código y las conexiones de tu circuito con Arduino.</p><p>Elegí por dónde empezar.</p>', HOME_CHIPS);
+}
+function nav(extra){
+  var c=[]; if(extra){c=extra;}
+  return c;
+}
+function backHome(list, noBack){
+  var l=list.slice();
+  if(!noBack) l.push({label:"Volver un paso", act:"back", cls:"ghost"});
+  l.push({label:"Inicio", act:"home", cls:"ghost"});
+  return l;
+}
+function ask(step){
+  if(step==="goal"){
+    say('<p><strong>Paso 1 de 4.</strong> ¿Qué querés que haga tu proyecto?</p>',
+      backHome(PRESETS.map(function(p){return {label:p.label, act:"goal:"+p.id};}), true));
+  } else if(step==="env"){
+    say('<p><strong>Paso 2 de 4.</strong> ¿Dónde lo vas a armar?</p>',
+      backHome(Object.keys(ENV).map(function(k){return {label:ENV[k].label, act:"env:"+k};})));
+  } else if(step==="nivel"){
+    var warn = P[S.goal].noSim ? '<div class="warn"><strong>Tinkercad no incluye este sensor</strong>, así que el prompt va orientado a una placa física. Es justo el tipo de límite que la IA ayuda a superar, siempre que valides el resultado.</div>' : '';
+    say(warn+'<p><strong>Paso '+(P[S.goal].noSim?'2':'3')+' de '+(P[S.goal].noSim?'3':'4')+'.</strong> ¿Qué experiencia tenés con Arduino?</p>',
+      backHome(Object.keys(NIVEL).map(function(k){return {label:NIVEL[k].label, act:"nivel:"+k};})));
+  } else if(step==="fmt"){
+    var n=P[S.goal].noSim?"3":"4";
+    say('<p><strong>Paso '+n+' de '+n+'.</strong> ¿Cómo querés la respuesta de la IA?</p>',
+      backHome(Object.keys(FMT).map(function(k){return {label:FMT[k].label, act:"fmt:"+k};})));
+  }
+}
+function nextStep(from){
+  var i=STEPS.indexOf(from)+1;
+  if(STEPS[i]==="env" && P[S.goal].noSim){ S.env="fis"; i++; }
+  ask(STEPS[i]);
+}
+function prevStep(){
+  var cur=null;
+  for(var i=STEPS.length-1;i>=0;i--){ if(S[STEPS[i]]){cur=i;break;} }
+  if(cur===null){ home(); return; }
+  var t=cur;
+  if(STEPS[t]==="env" && P[S.goal].noSim){ t=0; }
+  STEPS.slice(t).forEach(function(k){delete S[k];});
+  if(P[S.goal]===undefined){ S={}; }
+  ask(STEPS[t]);
+}
+function buildPrompt(){
+  var p=P[S.goal], env=S.env;
+  var parts=[
+    {n:"1", c:"p1", t:"Actuá como docente de electrónica y programación con Arduino. Necesito "+p.goal+"."},
+    {n:"2", c:"p2", t:"Trabajo "+ENV[env].txt+". "+NIVEL[S.nivel].txt},
+    {n:"3", c:"p3", t:"Componentes: "+pick(p.comp,env)+". "+pick(p.conex,env)},
+    {n:"4", c:"p4", t:FMT[S.fmt].txt}
+  ];
+  return parts;
+}
+function result(){
+  var parts=buildPrompt();
+  var html='<p><strong>Tu prompt está listo.</strong> Copialo y pegalo en la IA que uses (Claude, ChatGPT, Gemini u otra).</p>';
+  html+='<div class="codewrap"><pre>'+parts.map(function(x){return '<span class="p p'+x.n+'" data-n="'+x.n+'">'+esc(x.t)+'</span>';}).join("\n\n")+'</pre><button type="button" class="copy">Copiar</button></div>';
+  html+='<ul class="legend">'+
+    '<li style="--c:#7fd1ff"><span class="sw"></span><span><strong>1 Instrucción:</strong> la tarea concreta.</span></li>'+
+    '<li style="--c:#ffd479"><span class="sw"></span><span><strong>2 Contexto:</strong> entorno y nivel.</span></li>'+
+    '<li style="--c:#9be59b"><span class="sw"></span><span><strong>3 Datos de entrada:</strong> componentes y conexiones.</span></li>'+
+    '<li style="--c:#ff9fb2"><span class="sw"></span><span><strong>4 Indicador de salida:</strong> el formato de la respuesta.</span></li></ul>';
+  html+='<p class="note">Después de recibir la respuesta, no la uses directamente: revisala con la lista de verificación, probala y explicá con tus palabras qué hace cada parte.</p>';
+  if(S.env==="sim"){ html+='<div class="actions"><a class="abtn" href="'+TINKERCAD_URL+'" target="_blank" rel="noopener noreferrer">Abrir Tinkercad Circuits</a></div>'; }
+  say(html,[
+    {label:"Qué reviso antes de confiar en el código", act:"d:validar", cls:"main"},
+    {label:"Cambiar el formato de salida", act:"chgfmt"},
+    {label:"Armar otro prompt", act:"builder"},
+    {label:"Inicio", act:"home", cls:"ghost"}
+  ]);
+}
+function dudasMenu(){
+  say('<p>Respuestas breves a dudas frecuentes.</p>',
+    DUDAS.map(function(d){return {label:d.label, act:"d:"+d.id};}).concat([{label:"Armar un prompt para Arduino", act:"builder", cls:"main"},{label:"Inicio", act:"home", cls:"ghost"}]));
+}
+function dudaAns(id){
+  var d=D[id];
+  say(d.a,[{label:"Más dudas", act:"dudas"},{label:"Armar un prompt para Arduino", act:"builder", cls:"main"},{label:"Inicio", act:"home", cls:"ghost"}]);
+}
+
+/* ---------- despacho ---------- */
+var LABELS={builder:"Armar un prompt para Arduino", dudas:"Dudas rápidas", cred:"Créditos", home:"Inicio", back:"Volver un paso", again:"Armar otro prompt", chgfmt:"Cambiar el formato de salida"};
+function dispatch(act, label){
+  var a=act.split(":"), k=a[0], v=a[1];
+  addUser(label||LABELS[k]||act);
+  if(k==="home"){ home(); }
+  else if(k==="builder"){ S={}; ask("goal"); }
+  else if(k==="goal"){ S={goal:v}; nextStep("goal"); }
+  else if(k==="env"){ S.env=v; nextStep("env"); }
+  else if(k==="nivel"){ S.nivel=v; nextStep("nivel"); }
+  else if(k==="fmt"){ S.fmt=v; result(); }
+  else if(k==="chgfmt"){ delete S.fmt; ask("fmt"); }
+  else if(k==="back"){ prevStep(); }
+  else if(k==="dudas"){ dudasMenu(); }
+  else if(k==="d"){ dudaAns(v); }
+  else if(k==="cred"){ openCred(); say('<p>Abrí los créditos completos con sus referencias en la ventana que aparece. ¿Seguimos?</p>', HOME_CHIPS); }
+}
+log.addEventListener("click",function(e){
+  var chip=e.target.closest(".chip");
+  if(chip && !busy){ dispatch(chip.dataset.act, chip.textContent); return; }
+  var cp=e.target.closest(".copy");
+  if(cp){
+    var txt=cp.parentNode.querySelector("pre").textContent;
+    var done=function(){ cp.textContent="Copiado"; setTimeout(function(){cp.textContent="Copiar";},1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,function(){}); }
+    else{ var ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand("copy");done();}catch(_){} ta.remove(); }
+  }
+});
+
+var dlg=document.getElementById("creditos");
+function openCred(){ if(dlg.showModal){dlg.showModal();} else {dlg.setAttribute("open","");} }
+document.getElementById("btnCred").addEventListener("click",openCred);
+document.getElementById("credCerrar").addEventListener("click",function(){ dlg.close(); });
+dlg.addEventListener("click",function(e){ if(e.target===dlg){ dlg.close(); } });
+document.getElementById("btnHome").addEventListener("click",function(){ log.innerHTML=""; chipsEl=null; busy=false; home(false); });
+
+home(true);
+})();
+</script>
+</body>
+</html>
